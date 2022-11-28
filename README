@@ -1,0 +1,36 @@
+pixel-ed - a not very functional SDL pixel editor
+
+The problem with pixel editors (besides their not being available on
+OpenBSD) is the same problem as Object Oriented code: all you wanted
+was the banana, but you got the gorilla and the whole forest. Hence,
+after some amount of effort, a pixel editor that does exactly what I
+want, or maybe a lot less than that.
+
+  doas pkg_add sdl2
+  make
+  ./pixel-ed out.bmp
+
+  doas pkg_add ImageMagick
+  display out.bmp
+
+At present, there is not much more than "click on a palette color, then
+click or drag in the edit cells to change colors". An attempt at saving
+a bitmap is made when closing the program (via the "Q" key, or by
+hitting the process with any of several different signals). Oh and to
+use suitable flags for the grid size and whatnot or to otherwise TWEAK
+the code where need be.
+
+
+ALTERNATIVES
+
+That were mentioned on the #openbsd-gaming IRC channel.
+
+https://openports.se/graphics/mtpaint but gtk+3 (Gorilla To Kill)
+
+krita - instead requires a Qt flavored Gorilla. And boost, etc.
+
+https://github.com/justinmeiners/classic-colors but probably is tiny
+on a high DPI monitor?
+
+Any web-based pixel editor, but those require a bloat browser.
+(Eight zerodays in Chrome this year: set wince factor nine, Ensign!)

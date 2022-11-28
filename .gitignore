@@ -1,0 +1,4 @@
+*.bmp
+*.core
+ktrace.out
+pixel-ed
