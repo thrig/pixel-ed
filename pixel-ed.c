@@ -111,7 +111,8 @@ main(int argc, char *argv[])
 	}
 	// ImageMagick can "display" these, and I need BMP because SBCL
 	// is a wasteland for minor things like SDL_image
-	if (*argv && *argv[0] != '\0') app.filename = *argv;
+	if (argc != 1 || *argv[0] == '\0') emit_help();
+	app.filename = *argv;
 
 	// allocate pixel grid (actually a grid for palette colors)
 	app.pixels = malloc(app.rows * sizeof(int *));
@@ -276,7 +277,7 @@ emit_help(void)
 	fputs("Usage: pixel-ed [-p edit-pixel-size] [-s semi-size]\n"
 	      "                [-r rows] [-c columns]\n"
 	      "                [-h window-height] [-w window-width]\n"
-	      "                [filename.bmp]\n",
+	      "                filename.bmp\n",
 	      stderr);
 	exit(EX_USAGE);
 }
