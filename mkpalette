@@ -42,6 +42,7 @@ while (readline) {
         die "mkpalette: unknown line '$_'\n";
     }
 }
+die "mkpalette: no lines parsed\n" unless @palette;
 
 if ( defined $sort_by ) {
     if ( $sort_by eq 'value' ) {

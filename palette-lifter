@@ -11,11 +11,10 @@ use warnings;
 use experimental 'signatures';
 use Getopt::Long 'GetOptions';
 use Imager 0.68;
-use List::UtilsBy 'nsort_by';
 use POSIX 'ceil';
 
 # ugh things are unreadable on this high DPI monitor unless embiggen
-my $box_size = 192;
+my $box_size = 256;
 GetOptions(
     'boxsize|b=i' => \$box_size,
     'width|w=i'   => \my $custom_width,
@@ -27,42 +26,60 @@ my $img =
   or die Imager->errstr;
 my $output = shift // 'a.png';
 
-# TWEAK
+# TWEAK and also the size of this, below
 my $font = Imager::Font->new( file => "$ENV{HOME}/.fonts/unifont.ttf" )
   or die "palette-lifter: no such font\n";
 
 # NOPE for a BMP so instead use the stupid and slow way
 #use Data::Dumper;
 #warn Dumper $img->getcolors( $img->getcolorcount( maxcolors => 512 ) );
+
 my %seen;
 my ( $wide, $tall ) = ( $img->getwidth, $img->getheight );
 for my $t ( 0 .. $tall - 1 ) {
     for my $w ( 0 .. $wide - 1 ) {
         my $c = $img->getpixel( x => $w, y => $t );
-        my ( $rr, $gg, $bb, undef ) = $c->rgba;
+        my ( $rr, $gg, $bb, $alpha ) = $c->rgba;
         my ( $hh, $ss, $vv, undef ) = $c->hsv;
-        my $rgb = sprintf '%02X%02X%02X', $rr, $gg, $bb;
-        unless ( exists $seen{$rgb} ) {
-            $seen{$rgb} =
-              { value => $vv, rgb => "$rr,$gg,$bb", hsv => "$hh,$ss,$vv", c => $c };
+        $_ = sprintf "%.4f", $_ for $ss, $vv;
+        my $rgb  = sprintf '%02X%02X%02X',     $rr, $gg, $bb;
+        my $rgba = sprintf '%02X%02X%02X%02X', $rr, $gg, $bb, $alpha;
+        unless ( exists $seen{$rgba} ) {
+            $seen{$rgba} = {
+                alpha      => $alpha,
+                color      => $c,
+                hsv        => "$hh,$ss,$vv",
+                rgb        => "$rr $gg $bb",
+                rgbhex     => $rgb,
+                saturation => $ss,
+                value      => $vv,
+            };
         }
     }
 }
+die "palette-lifter: no colors found??\n" unless keys %seen;
 
 my ( $width, $height, $xx, $yy ) = ( squarify( scalar keys %seen ), 0, 0 );
 my $image =
   Imager->new( xsize => $box_size * $width, ysize => $box_size * $height )
   or die "image creation failed";
 
-my $label = labelf( $image, aa => 1, size => 26, font => $font );
-my @bw    = map { Imager::Color->new($_) } '#000000', '#FFFFFF';
+# TWEAK
+my $label = labelf( $image, aa => 1, size => 32, font => $font );
+# try not to put black text on a dark background, or the reverse
+my @bw = map { Imager::Color->new($_) } '#000000', '#FFFFFF';
 
-my $box_num = 0;
-for my $k ( nsort_by { $seen{$_}{value} } keys %seen ) {
-    say join ' ', $k, map { $seen{$k}{$_} } qw/rgb hsv/;
+# complicated sort is so the greyscale happens first, then the colors
+for my $k (
+    map $_->[0],
+    sort { $a->[1] <=> $b->[1] || $a->[2] <=> $b->[2] }
+    map [ $_, $seen{$_}{saturation} > 0 ? 1 : 0, $seen{$_}{value} ],
+    keys %seen
+) {
+    say join ' ', map { $seen{$k}{$_} } qw/rgb alpha hsv/;
     my $ymax = $box_size * $yy + $box_size;
     $image->box(
-        color  => $seen{$k}{c},
+        color  => $seen{$k}{color},
         filled => 1,
         ymin   => $box_size * $yy,
         xmin   => $box_size * $xx,
@@ -74,11 +91,11 @@ for my $k ( nsort_by { $seen{$_}{value} } keys %seen ) {
     $label->(
         string => $hsv,
         x      => $box_size * $xx + 8,
-        y      => $ymax - 28,
+        y      => $ymax - 36,
         color  => $seen{$k}{value} > 0.5 ? $bw[0] : $bw[1],
     );
     $label->(
-        string => $k,
+        string => join( ' ', $seen{$k}->@{qw/rgbhex alpha/} ),
         x      => $box_size * $xx + 8,
         y      => $ymax - 8,
         color  => $seen{$k}{value} > 0.5 ? $bw[0] : $bw[1],
