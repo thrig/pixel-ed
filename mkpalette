@@ -1,0 +1,85 @@
+#!/usr/bin/env perl
+#
+# mkpalette - read colors in various forms and make a palette image. the
+# input text can have at least three different formats, hex (with or
+# without a leading #), HSV, or RGB in decimal form:
+#
+#   #FFCC00
+#   120 0.5 0.5
+#   255 255 255
+#
+# for example,
+#
+#   ./genpalette | ./mkpalette out.png && feh out.png
+
+use 5.24.0;
+use warnings;
+use experimental 'signatures';
+use Getopt::Long 'GetOptions';
+use Imager 0.68;
+use List::UtilsBy 'nsort_by';
+use POSIX 'ceil';
+
+my $box_size = 128;
+GetOptions(
+    'boxsize|b=i' => \$box_size,           # how big palette boxes are
+    'sort=s'      => \my $sort_by,
+    'width|w=i'   => \my $custom_width,    # columns for palette
+) or exit 64;
+
+my $output = shift // 'a.png';
+my @palette;
+
+while (readline) {
+    chomp;
+    if (m/^#?([[:xdigit:]]{6})$/) {
+        push @palette, Imager::Color->new($1);
+    } elsif (m/^(\d+)\D(0\.\d+|1\.0)\D(0\.\d+|1\.0)$/a) {
+        push @palette, Imager::Color->new( hue => $1, s => $2, v => $3 );
+    } elsif (m/^(\d+)\D(\d+)\D(\d+)$/a) {
+        push @palette, Imager::Color->new( r => $1, g => $2, b => $3 );
+    } else {
+        die "mkpalette: unknown line '$_'\n";
+    }
+}
+
+if ( defined $sort_by ) {
+    if ( $sort_by eq 'value' ) {
+        @palette = nsort_by { ( $_->hsv )[2] } @palette;
+    } else {
+        die "mkpalette: unknown sort key '$sort_by'\n";
+    }
+}
+
+my ( $width, $height, $xx, $yy ) = ( squarify( scalar @palette ), 0, 0 );
+my $image =
+  Imager->new( xsize => $box_size * $width, ysize => $box_size * $height )
+  or die Imager->errstr;
+
+for my $color (@palette) {
+    $image->box(
+        color  => $color,
+        filled => 1,
+        ymin   => $box_size * $yy,
+        xmin   => $box_size * $xx,
+        ymax   => $box_size * $yy + $box_size,
+        xmax   => $box_size * $xx + $box_size,
+    );
+    if ( ++$xx >= $width ) {
+        $yy++;
+        $xx = 0;
+    }
+}
+
+$image->write( file => $output );
+
+# make the palette more like a rectangle, by user priority for the
+# width, if they supplied that
+sub squarify ($length) {
+    if ( defined $custom_width ) {
+        return $custom_width, ceil( $length / $custom_width );
+    } else {
+        my $root = int sqrt $length;
+        return ceil( $length / $root ), $root;
+    }
+}

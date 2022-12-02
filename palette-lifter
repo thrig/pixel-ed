@@ -1,0 +1,109 @@
+#!/usr/bin/env perl
+#
+# palette-lifter - show information about the palette of an image (in a
+# stupid and slow way involving every pixel) and generate an image with
+# the palette colors. less work than trying to figure out how to make
+# the eyedrop tool of some GUI program not sample an area of some size
+# thus obtaining some maybe averaged and randomly incorrect color, grr
+
+use 5.24.0;
+use warnings;
+use experimental 'signatures';
+use Getopt::Long 'GetOptions';
+use Imager 0.68;
+use List::UtilsBy 'nsort_by';
+use POSIX 'ceil';
+
+# ugh things are unreadable on this high DPI monitor unless embiggen
+my $box_size = 192;
+GetOptions(
+    'boxsize|b=i' => \$box_size,
+    'width|w=i'   => \my $custom_width,
+) or exit 64;
+
+my $img =
+  Imager->new( file => shift
+      // die "Usage: palette-lifter image-file [out-file]\n" )
+  or die Imager->errstr;
+my $output = shift // 'a.png';
+
+# TWEAK
+my $font = Imager::Font->new( file => "$ENV{HOME}/.fonts/unifont.ttf" )
+  or die "palette-lifter: no such font\n";
+
+# NOPE for a BMP so instead use the stupid and slow way
+#use Data::Dumper;
+#warn Dumper $img->getcolors( $img->getcolorcount( maxcolors => 512 ) );
+my %seen;
+my ( $wide, $tall ) = ( $img->getwidth, $img->getheight );
+for my $t ( 0 .. $tall - 1 ) {
+    for my $w ( 0 .. $wide - 1 ) {
+        my $c = $img->getpixel( x => $w, y => $t );
+        my ( $rr, $gg, $bb, undef ) = $c->rgba;
+        my ( $hh, $ss, $vv, undef ) = $c->hsv;
+        my $rgb = sprintf '%02X%02X%02X', $rr, $gg, $bb;
+        unless ( exists $seen{$rgb} ) {
+            $seen{$rgb} =
+              { value => $vv, rgb => "$rr,$gg,$bb", hsv => "$hh,$ss,$vv", c => $c };
+        }
+    }
+}
+
+my ( $width, $height, $xx, $yy ) = ( squarify( scalar keys %seen ), 0, 0 );
+my $image =
+  Imager->new( xsize => $box_size * $width, ysize => $box_size * $height )
+  or die "image creation failed";
+
+my $label = labelf( $image, aa => 1, size => 26, font => $font );
+my @bw    = map { Imager::Color->new($_) } '#000000', '#FFFFFF';
+
+my $box_num = 0;
+for my $k ( nsort_by { $seen{$_}{value} } keys %seen ) {
+    say join ' ', $k, map { $seen{$k}{$_} } qw/rgb hsv/;
+    my $ymax = $box_size * $yy + $box_size;
+    $image->box(
+        color  => $seen{$k}{c},
+        filled => 1,
+        ymin   => $box_size * $yy,
+        xmin   => $box_size * $xx,
+        ymax   => $ymax,
+        xmax   => $box_size * $xx + $box_size,
+    );
+    my $hsv = sprintf '%d %.2f %.2f', split /,/, $seen{$k}{hsv};
+    # KLUGE labels probably need less manual placement
+    $label->(
+        string => $hsv,
+        x      => $box_size * $xx + 8,
+        y      => $ymax - 28,
+        color  => $seen{$k}{value} > 0.5 ? $bw[0] : $bw[1],
+    );
+    $label->(
+        string => $k,
+        x      => $box_size * $xx + 8,
+        y      => $ymax - 8,
+        color  => $seen{$k}{value} > 0.5 ? $bw[0] : $bw[1],
+    );
+    if ( ++$xx >= $width ) {
+        $yy++;
+        $xx = 0;
+    }
+}
+
+$image->write( file => $output );
+
+# "label factory". not "lab elf".
+sub labelf ( $img, %param ) {
+    sub (%local) {
+        my %args = ( %param, %local );
+        $img->string(%args);
+    }
+}
+
+sub squarify ($length) {
+    if ( defined $custom_width ) {
+        return $custom_width, ceil( $length / $custom_width );
+    } else {
+        my $root = int sqrt $length;
+        return ceil( $length / $root ), $root;
+    }
+}

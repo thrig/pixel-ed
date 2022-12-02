@@ -10,7 +10,12 @@ pixel-ed: pixel-ed.c
 clean:
 	@-rm pixel-ed 2>/dev/null
 
+depend:
+	pkg-config --exists sdl2
+	perl -e 'use 5.24.0'
+	cpanm --installdeps .
+
 realclean: clean
 	@-rm *.core ktrace.out *.bmp 2>/dev/null
 
-.PHONY: clean realclean
+.PHONY: clean depend realclean
