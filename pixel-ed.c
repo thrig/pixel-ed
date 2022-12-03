@@ -29,6 +29,8 @@
 #define SEMI_OFFSET_X 16
 #define SEMI_OFFSET_Y 16
 
+char *palette_file; // -L
+
 struct bagofholding {
 	SDL_Window *win;
 	SDL_Renderer *rend;
@@ -54,6 +56,7 @@ static void dobail(int unused);
 static void emit_help(void);
 static unsigned long flagtoul(int flag, const char *flagarg, unsigned long min,
                               unsigned long max);
+static void load_palette(const char *file, SDL_Color ***pal, size_t *plen);
 static int mouse2grid(int x, int y, size_t *gridx, size_t *gridy);
 static void naptime(long *when, float *remainder);
 static void update(void);
@@ -66,8 +69,11 @@ main(int argc, char *argv[])
 	             editpixels = 48, semipixels = 8;
 
 	int ch;
-	while ((ch = getopt(argc, argv, "?r:c:p:h:w:s:")) != -1) {
+	while ((ch = getopt(argc, argv, "?L:r:c:p:h:w:s:")) != -1) {
 		switch (ch) {
+		case 'L':
+			palette_file = optarg;
+			break;
 		case 'p': // size of the edit cells to be clicked in
 			editpixels = (unsigned int) flagtoul(ch, optarg, 1, 64);
 			break;
@@ -122,26 +128,46 @@ main(int argc, char *argv[])
 	for (unsigned int i = 1; i < app.rows; i++)
 		app.pixels[i] = app.pixels[0] + i * app.cols;
 
-	// https://lospec.com/palette-list/pico-8
-	app.palettelen = 16;
-	app.palette    = calloc(app.palettelen, sizeof(SDL_Color *));
-	if (!app.palette) err(1, "calloc failed");
-	app.palette[0]  = &(SDL_Color){.r = 0x00, .g = 0x00, .b = 0x00, .a = 0};
-	app.palette[1]  = &(SDL_Color){.r = 0x1D, .g = 0x2B, .b = 0x53, .a = 0};
-	app.palette[2]  = &(SDL_Color){.r = 0x7E, .g = 0x25, .b = 0x53, .a = 0};
-	app.palette[3]  = &(SDL_Color){.r = 0x00, .g = 0x87, .b = 0x51, .a = 0};
-	app.palette[4]  = &(SDL_Color){.r = 0xAB, .g = 0x52, .b = 0x36, .a = 0};
-	app.palette[5]  = &(SDL_Color){.r = 0x5F, .g = 0x57, .b = 0x4F, .a = 0};
-	app.palette[6]  = &(SDL_Color){.r = 0xC2, .g = 0xC3, .b = 0xC7, .a = 0};
-	app.palette[7]  = &(SDL_Color){.r = 0xFF, .g = 0xF1, .b = 0xE8, .a = 0};
-	app.palette[8]  = &(SDL_Color){.r = 0xFF, .g = 0x00, .b = 0x4D, .a = 0};
-	app.palette[9]  = &(SDL_Color){.r = 0xFF, .g = 0xA3, .b = 0x00, .a = 0};
-	app.palette[10] = &(SDL_Color){.r = 0xFF, .g = 0xEC, .b = 0x27, .a = 0};
-	app.palette[11] = &(SDL_Color){.r = 0x00, .g = 0xE4, .b = 0x36, .a = 0};
-	app.palette[12] = &(SDL_Color){.r = 0x29, .g = 0xAD, .b = 0xFF, .a = 0};
-	app.palette[13] = &(SDL_Color){.r = 0x83, .g = 0x76, .b = 0x9C, .a = 0};
-	app.palette[14] = &(SDL_Color){.r = 0xFF, .g = 0x77, .b = 0xA8, .a = 0};
-	app.palette[15] = &(SDL_Color){.r = 0xFF, .g = 0xCC, .b = 0xAA, .a = 0};
+	if (palette_file) {
+		load_palette(palette_file, &app.palette, &app.palettelen);
+	} else {
+		// https://lospec.com/palette-list/pico-8
+		app.palettelen = 16;
+		app.palette    = calloc(app.palettelen, sizeof(SDL_Color *));
+		if (!app.palette) err(1, "calloc failed");
+		app.palette[0] =
+		  &(SDL_Color){.r = 0x00, .g = 0x00, .b = 0x00, .a = 0};
+		app.palette[1] =
+		  &(SDL_Color){.r = 0x1D, .g = 0x2B, .b = 0x53, .a = 0};
+		app.palette[2] =
+		  &(SDL_Color){.r = 0x7E, .g = 0x25, .b = 0x53, .a = 0};
+		app.palette[3] =
+		  &(SDL_Color){.r = 0x00, .g = 0x87, .b = 0x51, .a = 0};
+		app.palette[4] =
+		  &(SDL_Color){.r = 0xAB, .g = 0x52, .b = 0x36, .a = 0};
+		app.palette[5] =
+		  &(SDL_Color){.r = 0x5F, .g = 0x57, .b = 0x4F, .a = 0};
+		app.palette[6] =
+		  &(SDL_Color){.r = 0xC2, .g = 0xC3, .b = 0xC7, .a = 0};
+		app.palette[7] =
+		  &(SDL_Color){.r = 0xFF, .g = 0xF1, .b = 0xE8, .a = 0};
+		app.palette[8] =
+		  &(SDL_Color){.r = 0xFF, .g = 0x00, .b = 0x4D, .a = 0};
+		app.palette[9] =
+		  &(SDL_Color){.r = 0xFF, .g = 0xA3, .b = 0x00, .a = 0};
+		app.palette[10] =
+		  &(SDL_Color){.r = 0xFF, .g = 0xEC, .b = 0x27, .a = 0};
+		app.palette[11] =
+		  &(SDL_Color){.r = 0x00, .g = 0xE4, .b = 0x36, .a = 0};
+		app.palette[12] =
+		  &(SDL_Color){.r = 0x29, .g = 0xAD, .b = 0xFF, .a = 0};
+		app.palette[13] =
+		  &(SDL_Color){.r = 0x83, .g = 0x76, .b = 0x9C, .a = 0};
+		app.palette[14] =
+		  &(SDL_Color){.r = 0xFF, .g = 0x77, .b = 0xA8, .a = 0};
+		app.palette[15] =
+		  &(SDL_Color){.r = 0xFF, .g = 0xCC, .b = 0xAA, .a = 0};
+	}
 
 	if (SDL_Init(SDL_INIT_VIDEO) < 0)
 		errx(1, "SDL_Init failed: %s", SDL_GetError());
@@ -274,7 +300,8 @@ dobail(int unused)
 static void
 emit_help(void)
 {
-	fputs("Usage: pixel-ed [-p edit-pixel-size] [-s semi-size]\n"
+	fputs("Usage: pixel-ed [-L palette-file]\n"
+	      "                [-p edit-pixel-size] [-s semi-size]\n"
 	      "                [-r rows] [-c columns]\n"
 	      "                [-h window-height] [-w window-width]\n"
 	      "                filename.bmp\n",
@@ -303,6 +330,109 @@ flagtoul(int flag, const char *flagarg, unsigned long min, unsigned long max)
 	if (max != ULONG_MAX && val > max)
 		errx(1, "value for -%c above max %lu", flag, max);
 	return val;
+}
+
+inline static void
+load_palette(const char *file, SDL_Color ***pal, size_t *plen)
+{
+	size_t index = 0, max_len = 16;
+	SDL_Color **tmp = calloc(max_len, sizeof(SDL_Color *));
+	if (!tmp) err(1, "calloc failed");
+
+	char *line      = NULL;
+	size_t linesize = 0;
+	ssize_t linelen;
+	FILE *fh = fopen(file, "r");
+	if (!fh) err(1, "could not open palette file '%s'", file);
+
+	while ((linelen = getline(&line, &linesize, fh)) != -1) {
+		if (isdigit(*line)) {
+			unsigned int rr, gg, bb, alpha = 0;
+			int consumed, ret;
+			SDL_Color *c;
+
+			ret = sscanf(line, "%u%n", &rr, &consumed);
+			if (ret != 1) errx(1, "could not parse red");
+			if (rr > 255) errx(1, "color value > 255 '%u'", rr);
+			linelen -= consumed;
+			if (linelen <= 1) errx(1, "truncated line after red");
+			line += consumed;
+			if (!isspace(*line))
+				errx(1, "missing whitespace after red");
+			while (isspace(*line)) {
+				line++;
+				linelen--;
+			}
+
+			ret = sscanf(line, "%u%n", &gg, &consumed);
+			if (ret != 1) errx(1, "could not parse green");
+			if (gg > 255) errx(1, "color value > 255 '%u'", gg);
+			linelen -= consumed;
+			if (linelen <= 1) errx(1, "truncated line after green");
+			line += consumed;
+			if (!isspace(*line))
+				errx(1, "missing whitespace after green");
+			while (isspace(*line)) {
+				line++;
+				linelen--;
+			}
+
+			ret = sscanf(line, "%u%n", &bb, &consumed);
+			if (ret != 1) errx(1, "could not parse blue");
+			if (bb > 255) errx(1, "color value > 255 '%u'", bb);
+			linelen -= consumed;
+			// alpha is optional if there's nothing or only a newline left
+			if (linelen <= 1) goto ASSIGNMENT;
+			line += consumed;
+			if (!isspace(*line)) goto ASSIGNMENT;
+			while (isspace(*line)) {
+				line++;
+				linelen--;
+			}
+			// NOTE trailing whitespace after blue is allowed
+			if (linelen <= 1) goto ASSIGNMENT;
+
+			ret = sscanf(line, "%u", &alpha);
+			if (ret != 1)
+				errx(1, "could not parse alpha '%s' %ld", line,
+				     linelen);
+			if (alpha > 255)
+				errx(1, "alpha value > 255 '%u'", alpha);
+
+		ASSIGNMENT:
+			c = malloc(sizeof(SDL_Color));
+			if (!c) err(1, "malloc failed");
+			c->r         = (Uint8) rr;
+			c->g         = (Uint8) gg;
+			c->b         = (Uint8) bb;
+			c->a         = (Uint8) alpha;
+			tmp[index++] = c;
+			if (index >= max_len) {
+				// https://en.wikipedia.org/wiki/Indexed_color
+				// indicates that 256 or 4096 may be
+				// good limits
+				if (max_len >= SIZE_MAX >> 1)
+					errx(1, "palette is too large??");
+				max_len <<= 1;
+				if (max_len > SIZE_MAX / sizeof(SDL_Color *))
+					errc(1, EOVERFLOW, "palette overflow");
+				tmp =
+				  realloc(tmp, max_len * sizeof(SDL_Color *));
+				if (!tmp) err(1, "realloc failed");
+			}
+		}
+	}
+	// pixel-ed(25029) in free(): modified chunk-pointer 0xc02833f9b01
+	//free(orig_line);
+	if (ferror(fh)) err(1, "getline failed");
+	fclose(fh);
+
+	if (index < max_len) {
+		tmp = realloc(tmp, index * sizeof(SDL_Color *));
+		if (!tmp) err(1, "realloc failed");
+	}
+	*pal  = tmp;
+	*plen = index;
 }
 
 // borrowed from some SDL tutorial somewhere -- lock the frame rate
@@ -383,13 +513,13 @@ update(void)
 		}
 	}
 
-	// grid line color around the editing cells
+	// TWEAK grid line color around the editing cells
 	SDL_SetRenderDrawColor(app.rend, 192, 192, 192, 0);
 	for (int y = 0, yyy = 0; y <= (int) app.rows;
-	     y++, yyy += app.editpixels)
+	     y++, yyy += (int) app.editpixels)
 		SDL_RenderDrawLine(app.rend, 0, yyy, (int) app.max_width, yyy);
 	for (int x = 0, xxx = 0; x <= (int) app.cols;
-	     x++, xxx += app.editpixels)
+	     x++, xxx += (int) app.editpixels)
 		SDL_RenderDrawLine(app.rend, xxx, 0, xxx, (int) app.max_height);
 
 	// palette to be clicked on to change the active
@@ -400,7 +530,7 @@ update(void)
 	rect.w = (int) app.editpixels * 2;
 	rect.h = (int) app.editpixels;
 	for (int i = 0, yyy = 0; i < (int) app.palettelen;
-	     i++, yyy += app.editpixels) {
+	     i++, yyy += (int) app.editpixels) {
 		rect.y = yyy;
 		SDL_SetRenderDrawColor(app.rend, app.palette[i]->r,
 		                       app.palette[i]->g, app.palette[i]->b,

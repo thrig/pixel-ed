@@ -20,6 +20,26 @@ hitting the process with any of several different signals). Oh and to
 use suitable flags for the grid size and whatnot or to otherwise TWEAK
 the code where need be.
 
+The palette loading code looks for lines beginning with three or
+optionally four whitespace delimited columns of 0..255 numbers
+comprising red, green, blue, and optionally alpha values, e.g. a 12-bit
+rainbow with no alpha might consist of:
+
+  136 17 119
+  170 51 85
+  204 102 102
+  238 153 68
+  238 221 0
+  153 221 85
+  68 221 136
+  34 204 187
+  0 187 204
+  0 153 204
+  51 102 187
+  102 51 153
+
+https://iamkate.com/data/12-bit-rainbow/
+
 
 ALTERNATIVES
 
