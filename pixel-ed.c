@@ -68,6 +68,22 @@ main(int argc, char *argv[])
 	unsigned int rows = 16, cols = 16, width = 1280, height = 960,
 	             editpixels = 48, semipixels = 8;
 
+	if (SDL_Init(SDL_INIT_VIDEO) < 0)
+		errx(1, "SDL_Init failed: %s", SDL_GetError());
+	app.win = SDL_CreateWindow("pixel-ed", SDL_WINDOWPOS_UNDEFINED,
+	                           SDL_WINDOWPOS_UNDEFINED, (int) width,
+	                           (int) height, 0);
+	if (!app.win) errx(1, "SDL_CreateWindow failed: %s", SDL_GetError());
+	app.rend = SDL_CreateRenderer(app.win, -1, SDL_RENDERER_ACCELERATED);
+	if (!app.rend) errx(1, "SDL_CreateRenderer failed: %s", SDL_GetError());
+
+#ifdef __OpenBSD__
+	// NOTE "drm" may show up as 'pledge "tty", syscall 54' which
+	// the "tty" allow may not help with
+	if (pledge("cpath drm rpath stdio wpath unveil", NULL) == -1)
+		err(1, "pledge failed");
+#endif
+
 	int ch;
 	while ((ch = getopt(argc, argv, "?L:r:c:p:h:w:s:")) != -1) {
 		switch (ch) {
@@ -119,6 +135,9 @@ main(int argc, char *argv[])
 	// is a wasteland for minor things like SDL_image
 	if (argc != 1 || *argv[0] == '\0') emit_help();
 	app.filename = *argv;
+#ifdef __OpenBSD__
+	if (unveil(app.filename, "crw") == -1) err(1, "unveil failed");
+#endif
 
 	// allocate pixel grid (actually a grid for palette colors)
 	app.pixels = malloc(app.rows * sizeof(int *));
@@ -129,8 +148,15 @@ main(int argc, char *argv[])
 		app.pixels[i] = app.pixels[0] + i * app.cols;
 
 	if (palette_file) {
+#ifdef __OpenBSD__
+		if (unveil(palette_file, "r") == -1) err(1, "unveil failed");
+		if (unveil(NULL, NULL) == -1) err(1, "unveil failed");
+#endif
 		load_palette(palette_file, &app.palette, &app.palettelen);
 	} else {
+#ifdef __OpenBSD__
+		if (unveil(NULL, NULL) == -1) err(1, "unveil failed");
+#endif
 		// https://lospec.com/palette-list/pico-8
 		app.palettelen = 16;
 		app.palette    = calloc(app.palettelen, sizeof(SDL_Color *));
@@ -169,16 +195,11 @@ main(int argc, char *argv[])
 		  &(SDL_Color){.r = 0xFF, .g = 0xCC, .b = 0xAA, .a = 0};
 	}
 
-	if (SDL_Init(SDL_INIT_VIDEO) < 0)
-		errx(1, "SDL_Init failed: %s", SDL_GetError());
-	app.win = SDL_CreateWindow("pixel-ed", SDL_WINDOWPOS_UNDEFINED,
-	                           SDL_WINDOWPOS_UNDEFINED, (int) width,
-	                           (int) height, 0);
-	if (!app.win) errx(1, "SDL_CreateWindow failed: %s", SDL_GetError());
-	app.rend = SDL_CreateRenderer(app.win, -1, SDL_RENDERER_ACCELERATED);
-	if (!app.rend) errx(1, "SDL_CreateRenderer failed: %s", SDL_GetError());
-
+// segfaults in OpenBSD, pledge/unveil related? hopefully the process
+// going away cleans up everything
+#ifndef __OpenBSD__
 	atexit(cleanup_sdl);
+#endif
 	// KLUGE no save support (yet?) so we do that at exit
 	signal(SIGINT, dobail);
 	signal(SIGTERM, dobail);
@@ -187,15 +208,6 @@ main(int argc, char *argv[])
 
 	float remainder = 0.0; // for naptime()
 	long when       = SDL_GetTicks();
-
-#ifdef __OpenBSD__
-	// NOTE "drm" may show up as 'pledge "tty", syscall 54' which
-	// the "tty" allow may not help with
-	if (pledge("cpath drm stdio wpath unveil", NULL) == -1)
-		err(1, "pledge failed");
-	if (app.filename)
-		if (unveil(app.filename, "crw") == -1) err(1, "unveil failed");
-#endif
 
 	int activecolor = app.curcolor; // for mouse dragging
 	while (1) {
